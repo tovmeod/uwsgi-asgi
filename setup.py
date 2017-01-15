@@ -18,5 +18,5 @@ setup(
         'u-msgpack-python==2.3.0',
         'six',
     ],
-    tests_require=open('testproj/requirements.tx').readlines(),
+    tests_require=open('testproj/requirements.txt').readlines(),
 )
