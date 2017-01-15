@@ -14,9 +14,9 @@ setup(
     packages=find_packages(),
     include_package_data=True,
     install_requires=[
-        'uWSGI==2.0.14'
-        'Django>=1.8',
-        'asgiref>=0.13',
-        'daphne>=0.14.1',
-    ]
+        'uWSGI==2.0.14',
+        'u-msgpack-python==2.3.0',
+        'six',
+    ],
+    tests_require=open('testproj/requirements.tx').readlines(),
 )

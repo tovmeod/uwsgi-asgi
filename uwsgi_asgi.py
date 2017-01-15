@@ -1,10 +1,12 @@
-import json
 import logging
+import os
+import six
+import time
+from six.moves.urllib_parse import unquote  # todo test is I actually need this or does uwsgi already parses?
 import uwsgi
-import redis
-import msgpack
-from asgi_redis import RedisChannelLayer
-from daphne.ws_protocol import WebSocketProtocol
+import umsgpack
+# from asgi_redis import RedisChannelLayer
+# from daphne.ws_protocol import WebSocketProtocol
 
 __version__ = "0.1"
 
@@ -13,13 +15,13 @@ try:
     from testproject.asgi import channel_layer
     from testproject.wsgi import application as wsgi_app
 except ImportError:
-    from testproject.testproject.asgi import channel_layer
-    from testproject.testproject.wsgi import application as wsgi_app
+    from testproj.testproject.asgi import channel_layer
+    from testproj.testproject.wsgi import application as wsgi_app
 
-if isinstance(channel_layer, RedisChannelLayer):  # can I check this without importing? maybe using the class name?
-    pass  # For now I support only the redis backend
-else:
-    uwsgi.stop()
+# if isinstance(channel_layer, RedisChannelLayer):  # can I check this without importing? maybe using the class name?
+#     pass  # For now I support only the redis backend
+# else:
+#     uwsgi.stop()
 
 error_template = """
         <html>
@@ -49,7 +51,8 @@ def basic_error(start_response, status, status_text, body):
             }).encode("utf8")
 
 
-class WebSocket(WebSocketProtocol):
+# class WebSocket(WebSocketProtocol):
+class WebSocket:
     def __init__(self, env, reply_channel, channel_layer, path, query_string, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.reply_channel = reply_channel
@@ -85,69 +88,101 @@ class WebSocket(WebSocketProtocol):
         except self.channel_layer.ChannelFull:
             # You have to consume websocket.connect according to the spec,
             # so drop the connection.
-            self.muted = True
             logger.warning("WebSocket force closed for %s due to connect backpressure", self.reply_channel)
             # Send code 1013 "try again later" with close.
-            self.sendCloseFrame(code=1013, isReply=False)
+            # self.sendCloseFrame(code=1013, isReply=False)
+            return '1013'
 
+    def onMessage(self, payload, isBinary):
+        # If we're muted, do nothing.
+        # if self.muted:
+        #     logger.debug("Muting incoming frame on %s", self.reply_channel)
+        #     return
+        logger.debug("WebSocket incoming frame on %s", self.reply_channel)
+        self.packets_received += 1
+        self.last_data = time.time()
+        try:
+            if isBinary:
+                self.channel_layer.send("websocket.receive", {
+                    "reply_channel": self.reply_channel,
+                    "path": self.unquote(self.path),
+                    "order": self.packets_received,
+                    "bytes": payload,
+                })
+            else:
+                self.channel_layer.send("websocket.receive", {
+                    "reply_channel": self.reply_channel,
+                    "path": self.unquote(self.path),
+                    "order": self.packets_received,
+                    "text": payload.decode("utf8"),
+                })
+        except self.channel_layer.ChannelFull:
+            # You have to consume websocket.receive according to the spec,
+            # so drop the connection.
+            logger.warning("WebSocket force closed for %s due to receive backpressure", self.reply_channel)
+            # Send code 1013 "try again later" with close.
+            # self.sendCloseFrame(code=1013, isReply=False)
+            return '1013'
 
-def backend_reader_sync(redis_server, channel_layer, reply_channel, protocol):
-    """
-    Runs as an-often-as-possible task with the reactor, unless there was
-    no result previously in which case we add a small delay.
-    """
-    channels = ['websocket.receive']
-    delay = 0.05
-    # Don't do anything if there's no channels to listen on
-    if channels:
-        delay = 0.01
-        channel, message = channel_layer.receive(channels, block=False)
-        if channel:
-            delay = 0.00
-            # Deal with the message
-            try:
-                # unknown_message_keys = set(message.keys()) - {"bytes", "text", "close"}
-                # if unknown_message_keys:
-                #     raise ValueError(
-                #         "Got invalid WebSocket reply message on %s - contains unknown keys %s" % (
-                #             channel,
-                #             unknown_message_keys,
-                #         )
-                #     )
-                # print('got message from channel layer {} {} {}'.format(type(message), channel, message))
-                if reply_channel != message['reply_channel']:
-                    print('sending back to redis {}'.format(message))
-                    send_to_channel(redis_server, message['reply_channel'][15:], message)
-                else:
-                    # print('got message from the same thread {}'.format(reply_channel))
-                    return process_message(message)
-                # if message.get("bytes", None):
-                #     uwsgi.websocket_send_binary(message["bytes"])
-                # if message.get("text", None):
-                #     uwsgi.websocket_send(message["text"])
-                # if message.get("close", False):
-                #     return True
-            except Exception as e:
-                logger.error("HTTP/WS send decode error: %s" % e)
-    # reactor.callLater(delay, self.backend_reader_sync)
-
-
-def send_to_channel(redis_server, sub_name, message):
-    print(redis_server.publish('alo', 'message text'))
-    message['alo'] = 'aloo'
-    print(msgpack.packb(message))
-    print(redis_server.publish('alo', msgpack.packb(message)))
-    print(redis_server.publish('listen'+sub_name, msgpack.packb(message)))
+    @classmethod
+    def unquote(cls, value):
+        """
+        Python 2 and 3 compat layer for utf-8 unquoting
+        """
+        if six.PY2:
+            return unquote(value).decode("utf8")
+        else:
+            return unquote(value.decode("ascii"))
 
 
 def process_message(message):
-    if message.get("bytes", None):
-        uwsgi.websocket_send_binary(message["bytes"])
-    if message.get("text", None):
-        uwsgi.websocket_send(message["text"])
-    if message.get("close", False):
-        print('closing websocket')
-        return True
+    try:
+        if message.get("bytes", None):
+            uwsgi.websocket_send_binary(message["bytes"])
+        if message.get("text", None):
+            uwsgi.websocket_send(message["text"])
+        if message.get("close", False):
+            print('closing websocket')
+            return True
+        print('finished processing message')
+    except OSError:
+        pass  # probably the websocket is closed
+
+
+class IPC:
+    def __init__(self, name, reader):
+        self.name = '/tmp/{}'.format(name).replace('!', '_')
+        self.name = '/home/avraham/{}'.format(name)
+        self.reader = reader
+        if reader:
+            os.mkfifo(self.name)
+            self.pipeinfd = os.open(self.name, os.O_RDONLY | os.O_NONBLOCK)
+            self.pipein = os.fdopen(self.pipeinfd, 'rb')
+        else:
+            self.pipeinfd = None
+            self.pipeoutfd = os.open(self.name, os.O_WRONLY)
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+
+        if self.pipeinfd:
+            os.close(self.pipeinfd)
+        if self.reader and os.path.exists(self.name):
+            os.remove(self.name)
+
+    @property
+    def fileno(self):
+        return self.pipeinfd
+
+    def receive_message(self):
+        msgdata = self.pipein.read()
+        return umsgpack.unpackb(msgdata)
+
+    def send_message(self, message):
+        msgdata = umsgpack.packb(message)
+        os.write(self.pipeoutfd, msgdata)
 
 
 def application(env, start_response):
@@ -163,85 +198,67 @@ def application(env, start_response):
     #     self.client_addr = None
     #     self.server_addr = None
     # Check for unicodeish path (or it'll crash when trying to parse)
+    print('request id {}'.format(uwsgi.request_id()))
     try:
         path = env['PATH_INFO'].encode("ascii")  # not sure if I need to check, maybe uwsgi already does
     except UnicodeEncodeError:
         return basic_error(start_response, 400, b"Bad Request", "Invalid characters in path")
     query_string = env['QUERY_STRING']
     if 'HTTP_UPGRADE' in env and env['HTTP_UPGRADE'].lower() == "websocket":  # it means this is a ws request
-        uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'], env.get('HTTP_ORIGIN', ''))
-        # print("websockets...")
+        try:
+            uwsgi.websocket_handshake(env['HTTP_SEC_WEBSOCKET_KEY'], env.get('HTTP_ORIGIN', ''))
+        except OSError:
+            return ''  # unable to complete websocket handshake
         # Make sending channel
         reply_channel = channel_layer.new_channel("websocket.send!")
-        sub_name = 'listen'+reply_channel[15:]
         protocol = WebSocket(env, reply_channel, channel_layer, path, query_string)
-        protocol.onOpen()
+        code = protocol.onOpen()
+        if code:
+            return code
 
-        redis_server = redis.StrictRedis(host='localhost', port=6379, db=0)
-        redis_server.publish('alo', 'opened ws')
-        redis_fd = None
         websocket_fd = uwsgi.connection_fd()
-
-        while True:
-            # print('trying to get redis fd')
-            # redis_conn = channel_layer.lpopmany.registered_client.connection_pool.get_connection('')
-            # if redis_conn._sock:
-            #     redis_fd = redis_conn._sock.fileno()
-            # else:
-            #     redis_fd = None
-            if redis_fd is None and False:
-                channel = redis_server.pubsub()
-                channel.subscribe(sub_name)
-                redis_server.publish('alo', 'redis_fd was None')
-                redis_fd = channel.connection._sock.fileno()
-            # print('redis fd {} reply channel {}'.format(redis_fd, reply_channel))
-            # redis_fd = None
-
-            try:
-                uwsgi.wait_fd_read(websocket_fd, 3)
-            except OSError:  # client closed the socket
-                print('websocket_fd {}'.format(websocket_fd))
-                print('client closed socket')
-                return ''
-            try:
-                if redis_fd:
-                    uwsgi.wait_fd_read(redis_fd)
-            except OSError as e:  # I don't know why, sometimes it throws 'OSError: unable to fd 16 to the event queue'
-                print(e)
-                redis_fd = None
-                channel.connection.disconnect()
-            uwsgi.suspend()
-            fd = uwsgi.ready_fd()
-            if fd > -1:
-                if fd == websocket_fd:
+        with IPC(reply_channel, reader=True) as wsipc:
+            print('wsipc fd {}'.format(wsipc.fileno))
+            while True:
+                try:
+                    uwsgi.wait_fd_read(websocket_fd, 3)
+                except OSError:  # client closed the socket
+                    print('websocket_fd {}'.format(websocket_fd))
+                    print('client closed socket')
+                    return ''
+                try:
+                    uwsgi.wait_fd_read(wsipc.fileno)
+                except OSError as e:  # sometimes it throws 'OSError: unable to fd 16 to the event queue'
+                    print('error waiting for ipc {}, reply channel {}'.format(wsipc.fileno, reply_channel))
+                    print(e)
+                    uwsgi.stop()
+                uwsgi.suspend()
+                fd = uwsgi.ready_fd()
+                if fd > -1:
+                    if fd == websocket_fd:
+                        try:
+                            msg = uwsgi.websocket_recv_nb()
+                        except OSError:  # websocket closed on client side
+                            return ''
+                        if msg:
+                            code = protocol.onMessage(msg, False)
+                            if code:
+                                return code
+                    elif fd == wsipc.fileno:
+                        msg = wsipc.receive_message()
+                        uwsgi.log('got ipc message '+str(msg))
+                        if msg['reply_channel'] != reply_channel:
+                            print('msg reply_channel different {} {}'.format(msg['reply_channel'], reply_channel))
+                            uwsgi.stop()
+                        if process_message(msg):
+                            return ''
+                else:  # on timeout call websocket_recv_nb again to manage ping/pong
                     try:
                         msg = uwsgi.websocket_recv_nb()
-                    except OSError:  # websocket closed on client side
-                        return ''
+                    except OSError:
+                        return ''  # unable to receive websocket message
                     if msg:
-                        # r.publish('foobar', msg)
                         protocol.onMessage(msg, False)
-                elif redis_fd and fd == redis_fd:
-                    print('Redis FD {} ready reply channel {}'.format(redis_fd, reply_channel))
-                    t, ch, message = channel.parse_response()
-                    print(t, ch, message)
-                    if t == b'message':
-                        message = message.decode('utf-8')
-                        print(type(message))
-                        print(message)
-                        message = json.loads(message)
-                        print(type(message))
-                        print(message)
-                        # uwsgi.websocket_send("[%s] %s" % (time.time(), msg))
-                        if process_message(message):
-                            return ''
-            else:
-                # on timeout call websocket_recv_nb again to manage ping/pong
-                msg = uwsgi.websocket_recv_nb()
-                if msg:
-                    protocol.onMessage(msg, False)
-            if backend_reader_sync(redis_server, protocol.channel_layer, protocol.reply_channel, protocol):
-                return ''
-            print('.', end='', flush=True)
+                print('.', end='', flush=True)
     else:  # normal http
         return wsgi_app(env, start_response)
