@@ -3,7 +3,9 @@ from channels.sessions import enforce_ordering
 
 #@enforce_ordering(slight=True)
 def ws_connect(message):
-    pass
+    message.reply_channel.send({
+        'accept': True
+    })
 
 
 #@enforce_ordering(slight=True)
