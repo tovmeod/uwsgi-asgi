@@ -16,6 +16,7 @@ setup(
     install_requires=[
         'uWSGI==2.0.14',
         'six',
+        'u-msgpack-python==2.3.0',
     ],
     tests_require=open('testproj/requirements.txt').readlines()+['websocket-client==0.40.0', 'pytest==3.0.5',
                                                                  'pytest-timeout==1.2.0'],
