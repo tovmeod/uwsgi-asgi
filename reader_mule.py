@@ -37,7 +37,7 @@ class LayerWrapperWriter:
         if msgdata:
             chname = umsgpack.unpackb(msgdata)
             if chname.startswith('-'):
-                print('removing channel from reader {}'.format(chname))
+                print('removing channel from reader {} {}'.format(chname, len(self.channels)))
                 chname = chname[1:]
                 try:
                     fd = self._channels.pop(chname)
@@ -45,12 +45,23 @@ class LayerWrapperWriter:
                 except KeyError:
                     pass
             else:
-                if chname not in self._channels:
-                    self._channels[chname] = os.open(get_pipe_name(chname), os.O_WRONLY)
+                self.remove(chname)
 
     def send(self, chname, message):
         msgdata = umsgpack.packb(message)
-        os.write(self._channels[chname], msgdata)
+        try:
+            os.write(self._channels[chname], msgdata)
+        except BrokenPipeError:
+            self.remove(chname)
+
+    def remove(self, chname):
+        if chname not in self._channels:
+            if not os.path.exists(get_pipe_name(chname)):
+                print('pipe does not exists!! {}'.format(get_pipe_name(chname)))
+            self._channels[chname] = os.open(get_pipe_name(chname), os.O_WRONLY)
+            print('new channel {} {}'.format(chname, len(self.channels)))
+        else:
+            print('got channel name already in dict {}'.format(chname))
 
     @property
     def channels(self):
@@ -65,7 +76,7 @@ def reader():
     layer_wrapper = LayerWrapperWriter()
     while True:
         layer_wrapper.read()
-        channel, message = channel_layer.receive_many(layer_wrapper.channels, block=False)
+        channel, message = channel_layer.receive(layer_wrapper.channels, block=False)
         if channel:
             # Deal with the message
             try:
@@ -88,6 +99,7 @@ def reader():
                 log("HTTP/WS send decode error: %s" % e)
                 raise
         else:
+            # print(len(layer_wrapper.channels), end='', flush=True)
             time.sleep(0.05)
     uwsgi.log('finished reader mule!!!')
 
