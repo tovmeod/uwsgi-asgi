@@ -16,12 +16,12 @@ __version__ = "0.1"
 
 logger = logging.getLogger(__name__)
 try:
-    from testproject.asgi import channel_layer
-    # from testproject.asgi_for_ipc import channel_layer
+    # from testproject.asgi import channel_layer
+    from testproject.asgi_for_ipc import channel_layer
     from testproject.wsgi import application as wsgi_app
 except ImportError:
-    from testproj.testproject.asgi import channel_layer
-    # from testproj.testproject.asgi_for_ipc import channel_layer
+    # from testproj.testproject.asgi import channel_layer
+    from testproj.testproject.asgi_for_ipc import channel_layer
     from testproj.testproject.wsgi import application as wsgi_app
 
 
@@ -267,6 +267,7 @@ class RedisEpollLayer(LayerEpollMixin):
 
 
 def get_epoll_layer(ch_layer):
+    return None
     if isinstance(ch_layer, LayerEpollMixin):
         return ch_layer
     if isinstance(ch_layer, RedisChannelLayer):
@@ -291,12 +292,6 @@ def application(env, start_response):
         return basic_error(start_response, 400, b"Bad Request", "Invalid characters in path")
     query_string = env['QUERY_STRING']
     if 'HTTP_UPGRADE' in env and env['HTTP_UPGRADE'].lower() == "websocket":  # it means this is a ws request
-        # epoll_layer = gepoll_layer
-        # global gepoll_layer
-        # if not gepoll_layer:
-        #     gepoll_layer = epoll_layer
-        # else:
-        #     print('gepoll_layer is not None')
         with ExitStack() as stack:
             # Make sending channel
             reply_channel = channel_layer.new_channel("websocket.send!")

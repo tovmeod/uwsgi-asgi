@@ -20,4 +20,7 @@ setup(
     ],
     tests_require=open('testproj/requirements.txt').readlines()+['websocket-client==0.40.0', 'pytest==3.0.5',
                                                                  'pytest-timeout==1.2.0'],
+    entry_points={'console_scripts': [
+        'uwsgiasgi = uwsgi_asgi.cli:CommandLineInterface.entrypoint',
+    ]},
 )
