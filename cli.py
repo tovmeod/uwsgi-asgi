@@ -58,6 +58,12 @@ class CommandLineInterface(object):
             help='This is complete path of the directory to be changed to a new location, typically the django project root',
             default=os.path.join(os.path.dirname(sys.executable), 'uwsgi')
         )
+        self.parser.add_argument(
+            '--asgi-workers',
+            type=int,
+            help='Set the number of channels workers to run, set to 0 to disable.',
+            default=1
+        )
         # self.parser.add_argument(
         #     '-b',
         #     '--bind',
@@ -208,11 +214,11 @@ class CommandLineInterface(object):
 
 
         executable = '{uwsgipath} --http-socket :{port} --master --ugreen --wsgi-file ../uwsgi_asgi.py --async {async}'.format(**vars(args))
+        for i in range(args.asgi_workers):
+            executable += ' --mule=../worker_mule.py'  # todo, maybe I can use farm instead of a loop
         print(executable)
         p = subprocess.Popen(executable.split(' '), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
         return p.wait()
-        # print('sending sigint to {}'.format(p.pid))
-        # os.kill(p.pid, SIGINT)
 
 
 if __name__ == '__main__':
