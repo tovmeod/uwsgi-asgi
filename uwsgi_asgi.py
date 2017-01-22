@@ -140,7 +140,7 @@ def process_message(message):
         print('process_message exception {}'.format(message), end='', flush=True)
 
 
-class LayerEpollMixin:
+class LayerEpollWrapper:
     def connect(self, channel_name, ch_layer):
         raise NotImplementedError
 
@@ -164,7 +164,7 @@ def get_pipe_name(channel_name):
     return '/home/avraham/{}'.format(channel_name)
 
 
-class LayerWrapper(LayerEpollMixin):
+class GenericLayerWrapper(LayerEpollWrapper):
     pipeinfd = None
     channel_name = None
     reader_mule_pipe = None
@@ -224,7 +224,7 @@ class LayerWrapper(LayerEpollMixin):
         os.write(self.pipeoutfd, msgdata)
 
 
-class RedisEpollLayer(LayerEpollMixin):
+class RedisLayerWrapper(LayerEpollWrapper):
     def __init__(self, channel_layer):
         pass
         # self.redis_conn.send_command('BLPOP', 'asgi:' + reply_channel, 3)
@@ -266,14 +266,14 @@ class RedisEpollLayer(LayerEpollMixin):
         return self.redis_fd
 
 
-def get_epoll_layer(ch_layer):
+def get_epoll_wrapper(ch_layer):
     return None
     if isinstance(ch_layer, LayerEpollMixin):
         return ch_layer
     if isinstance(ch_layer, RedisChannelLayer):
         return None
-        return LayerWrapper()
-        return RedisEpollLayer(ch_layer)
+        return GenericLayerWrapper()
+        return RedisLayerWrapper(ch_layer)
     return LayerWrapper()
 
 
@@ -299,23 +299,24 @@ def application(env, start_response):
             code = wsapp.onOpen()  # send to channel layer the connect message and wait for 'accept': True
             if code:
                 return code
-            epoll_layer = get_epoll_layer(channel_layer)
+            epoll_wrapper = get_epoll_wrapper(channel_layer)
             # stack.callback(epoll_layer.close)
             # assert isinstance(epoll_layer, LayerEpollMixin)
-            if epoll_layer and not epoll_layer.connect(reply_channel, channel_layer):
+            if epoll_wrapper and not epoll_wrapper.connect(reply_channel, channel_layer):
                 return basic_error(start_response, 500, b"Denied", "Could not connect to channel layer")
+
+            # wait for response before sending handshake
             received_msg = None
-            if epoll_layer:
-                uwsgi.wait_fd_read(epoll_layer.fileno)
+            if epoll_wrapper:
+                uwsgi.wait_fd_read(epoll_wrapper.fileno)
                 uwsgi.suspend()
                 fd = uwsgi.ready_fd()
-                if fd == epoll_layer.fileno:
-                    received_msg = epoll_layer.receive()
+                if fd == epoll_wrapper.fileno:
+                    received_msg = epoll_wrapper.receive()
             else:
                 print('not epoll layer')
                 start = time.time()
                 while time.time() - start < 3:
-                    print('!', end='', flush=True)
                     ch, received_msg = channel_layer.receive([reply_channel], block=False)
                     if ch:
                         break
@@ -329,16 +330,22 @@ def application(env, start_response):
                     return ''  # unable to complete websocket handshake
 
             websocket_fd = uwsgi.connection_fd()
+            if epoll_wrapper:
+                websocket_fd_timeout = 3
+            else:
+                websocket_fd_timeout = 1
+                ppcounter = time.time()  # if not epolling channel layer count the time to send ping/pong
             while True:
                 try:
-                    uwsgi.wait_fd_read(websocket_fd, 3)
+                    uwsgi.wait_fd_read(websocket_fd, websocket_fd_timeout)
                 except OSError:  # client closed the socket
                     print('websocket_fd {}'.format(websocket_fd))
                     print('aeae client closed socket')
                     return ''
 
-                if epoll_layer:
-                    uwsgi.wait_fd_read(epoll_layer.fileno)
+                if epoll_wrapper:
+                    uwsgi.wait_fd_read(epoll_wrapper.fileno)
+
                 uwsgi.suspend()
                 fd = uwsgi.ready_fd()
                 if fd == websocket_fd:
@@ -352,19 +359,23 @@ def application(env, start_response):
                         if code:
                             print('onMessage code {}'.format(code))
                             return code
-                elif epoll_layer and fd == epoll_layer.fileno:
-                    msg = epoll_layer.receive()
+                elif epoll_wrapper and fd == epoll_wrapper.fileno:
+                    msg = epoll_wrapper.receive()
                     if process_message(msg):
                         return ''
                 else:  # on timeout call websocket_recv_nb again to manage ping/pong, typically on this point fd == -1
-                    try:
-                        msg = uwsgi.websocket_recv_nb()
-                    except OSError:
-                        print('unable to receive websocket message')
-                        return ''  # unable to receive websocket message
-                    if msg:
-                        wsapp.onMessage(msg, False)
-                    if not epoll_layer:
+                    if epoll_wrapper or (not epoll_wrapper and time.time() - ppcounter > 3):
+                        print('ping/pong ', end='', flush=True)
+                        try:
+                            msg = uwsgi.websocket_recv_nb()
+                            if not epoll_wrapper:
+                                ppcounter = time.time()
+                        except OSError:
+                            print('unable to receive websocket message')
+                            return ''  # unable to receive websocket message
+                        if msg:
+                            wsapp.onMessage(msg, False)
+                    if not epoll_wrapper:
                         ch, msg = channel_layer.receive([reply_channel], block=False)
                         if ch:
                             if process_message(msg):
