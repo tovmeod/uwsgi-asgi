@@ -1,8 +1,10 @@
 import os
 import sys
-
 import time
+
 import umsgpack
+
+from uwsgi_asgi import channel_layer, get_pipe_name
 
 sys.path.append(os.getcwd())
 try:
@@ -10,7 +12,6 @@ try:
     log = uwsgi.log
 except ImportError:
     log = print
-from uwsgi_asgi import channel_layer, get_pipe_name
 
 
 class LayerWrapperWriter:
