@@ -1,14 +1,11 @@
 #!/usr/bin/env python
-import os
-import sys
 import argparse
-import logging
 import importlib
-
+import logging
+import os
 import subprocess
+import sys
 
-# from .server import Server, build_endpoint_description_strings
-# from .access import AccessLogGenerator
 from _signal import SIGINT
 
 logger = logging.getLogger(__name__)
@@ -166,7 +163,10 @@ class CommandLineInterface(object):
         args = self.parser.parse_args(args)
         sys.path.append('.')
         if args.chdir:
+            wascwd = os.getcwd()
             os.chdir(args.chdir)
+        else:
+            wascwd = None
 
         if ':' in args.channel_layer:
             module_path, object_path = args.channel_layer.split(":", 1)
@@ -179,6 +179,9 @@ class CommandLineInterface(object):
         for bit in object_path.split("."):
             channel_layer = getattr(channel_layer, bit)
         print(type(channel_layer))
+        if wascwd:
+            os.chdir(wascwd)
+        os.environ['channel_layer'] = '{}:{}'.format(module_path, object_path)
         #
         # if not any([args.host, args.port, args.unix_socket, args.file_descriptor, args.socket_strings]):
         #     # no advanced binding options passed, patch in defaults
@@ -190,7 +193,6 @@ class CommandLineInterface(object):
         #     args.host = DEFAULT_HOST
         #
 
-
         uwsgi_asgipy = os.path.join(uwsgi_asgi_path, 'uwsgi_asgi.py')
         worker_mulepy = os.path.join(uwsgi_asgi_path, 'worker_mule.py')
         args = vars(args)
@@ -201,7 +203,7 @@ class CommandLineInterface(object):
             executable += ' --mule={worker_mulepy}'  # todo, maybe I can use farm instead of a loop
         executable = executable.format(**args)
         print(executable)
-        self.p = subprocess.Popen(executable.split(' '), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
+        self.p = subprocess.Popen(executable.split(' '), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, cwd=args['chdir'])
         if blocking:
             return self.p.wait()
 

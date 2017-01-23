@@ -19,10 +19,8 @@ class TestWebSocketProtocol(TestCase):
     """
 
     def setUp(self):
-        self.wascwd = os.getcwd()
-        os.chdir(os.path.join(os.path.dirname(os.path.abspath(__file__)), 'testproj'))
         self.server = CommandLineInterface()
-        self.server.run(['testproject.asgi'], blocking=False)
+        self.server.run(['testproject.asgi', '--chdir', 'tests/testproj'], blocking=False)
         self.channel_layer = RedisChannelLayer()
         self.channel_layer.connection(None).flushall()
         time.sleep(1)
@@ -30,7 +28,6 @@ class TestWebSocketProtocol(TestCase):
 
     def tearDown(self):
         self.server.close()
-        os.chdir(self.wascwd)
 
     @pytest.mark.timeout(10)
     def test_basic(self):
