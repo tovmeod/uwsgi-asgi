@@ -79,25 +79,23 @@ class MyClientProtocol(WebSocketClientProtocol):
             }
 
 
-
 class Benchmarker(object):
     """
     Performs benchmarks against WebSockets.
     """
 
-    def __init__(self, url, num, concurrency, rate, messages, spawn):
+    def __init__(self, url, num, concurrency, rate, messages, spawn, reactor):
         self.url = url
         self.num = num
         self.concurrency = concurrency
         self.rate = rate
         self.spawn = spawn
         self.messages = messages
-        self.factory = WebSocketClientFactory(
-            args.url,
-        )
+        self.factory = WebSocketClientFactory(url)
         self.factory.protocol = MyClientProtocol
         self.factory.num_messages = self.messages
         self.factory.message_rate = self.rate
+        self.reactor = reactor
 
     def loop(self):
         self.spawn_loop()
@@ -105,11 +103,11 @@ class Benchmarker(object):
 
     def spawn_loop(self):
         self.spawn_connections()
-        reactor.callLater(0.1, self.spawn_loop)
+        self.reactor.callLater(0.1, self.spawn_loop)
 
     def progress_loop(self):
         self.print_progress()
-        reactor.callLater(1, self.progress_loop)
+        self.reactor.callLater(1, self.progress_loop)
 
     def spawn_connections(self):
         # Stop spawning if we did the right total number
@@ -125,7 +123,7 @@ class Benchmarker(object):
         open_protocols = len([x for x in stats.values() if not x])
         to_spawn = min(max(self.concurrency - open_protocols, 0), max_to_spawn)
         for _ in range(to_spawn):
-            reactor.connectTCP(host, port, self.factory)
+            self.reactor.connectTCP(host, port, self.factory)
 
     def print_progress(self):
         open_protocols = len([x for x in stats.values() if not x])
@@ -134,7 +132,7 @@ class Benchmarker(object):
             len(stats),
         ))
         if open_protocols == 0 and len(stats) >= self.num:
-            reactor.stop()
+            self.reactor.stop()
             self.print_stats()
 
     def percentile(self, values, fraction):
@@ -195,14 +193,9 @@ class Benchmarker(object):
 
 
 if __name__ == '__main__':
-
-    import sys
     import argparse
 
-    from twisted.python import log
     from twisted.internet import reactor
-
-#    log.startLogging(sys.stdout)
 
     parser = argparse.ArgumentParser()
     parser.add_argument("url")
@@ -220,6 +213,7 @@ if __name__ == '__main__':
         rate=args.rate,
         messages=args.messages,
         spawn=args.spawn,
+        reactor=reactor
     )
     benchmarker.loop()
     reactor.run()

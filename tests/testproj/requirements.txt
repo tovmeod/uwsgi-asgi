@@ -1,5 +1,5 @@
 asgi_redis
-#asgi_ipc
+asgi_ipc
 channels
 #autobahn==0.14.1
 #daphne==0.13.1
