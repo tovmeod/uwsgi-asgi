@@ -1,4 +1,5 @@
 from setuptools import find_packages, setup
+
 from uwsgi_asgi import __version__
 
 setup(
