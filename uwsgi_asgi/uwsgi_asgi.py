@@ -1,15 +1,14 @@
 import logging
 import os
+import time
 from contextlib import ExitStack
 
 import six
-import time
-
 import umsgpack
-from six.moves.urllib_parse import unquote  # todo test is I actually need this or does uwsgi already parses?
 import uwsgi
 from asgi_redis import RedisChannelLayer
-import redis
+from six.moves.urllib_parse import unquote  # todo test is I actually need this or does uwsgi already parses?
+
 # from daphne.ws_protocol import WebSocketProtocol
 
 __version__ = "0.1"
@@ -21,8 +20,8 @@ try:
     from testproject.wsgi import application as wsgi_app
 except ImportError:
     # from testproj.testproject.asgi import channel_layer
-    from testproj.testproject.asgi_for_ipc import channel_layer
-    from testproj.testproject.wsgi import application as wsgi_app
+    from tests.testproj.testproject import channel_layer
+    from tests.testproj.testproject.wsgi import application as wsgi_app
 
 
 error_template = """

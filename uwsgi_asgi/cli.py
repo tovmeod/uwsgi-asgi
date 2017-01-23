@@ -11,9 +11,6 @@ import subprocess
 # from .access import AccessLogGenerator
 from _signal import SIGINT
 
-import time
-from importlib._bootstrap_external import SourceFileLoader
-
 logger = logging.getLogger(__name__)
 
 DEFAULT_HOST = '127.0.0.1'
@@ -158,38 +155,19 @@ class CommandLineInterface(object):
         except KeyboardInterrupt:
             pass
 
-    def run(self, args):
+    def run(self, args, blocking=True):
         """
         Pass in raw argument list and it will decode them
         and run the server.
         """
         # Decode args
+        print(args)
+        uwsgi_asgi_path = os.path.dirname(os.path.abspath(__file__))
         args = self.parser.parse_args(args)
         sys.path.append('.')
         if args.chdir:
             os.chdir(args.chdir)
-        # print(os.getcwd())
-        # foo.MyClass()
-        # # Set up logging
-        # logging.basicConfig(
-        #     level={
-        #         0: logging.WARN,
-        #         1: logging.INFO,
-        #         2: logging.DEBUG,
-        #     }[args.verbosity],
-        #     format="%(asctime)-15s %(levelname)-8s %(message)s",
-        # )
-        # # If verbosity is 1 or greater, or they told us explicitly, set up access log
-        # access_log_stream = None
-        # if args.access_log:
-        #     if args.access_log == "-":
-        #         access_log_stream = sys.stdout
-        #     else:
-        #         access_log_stream = open(args.access_log, "a", 1)
-        # elif args.verbosity >= 1:
-        #     access_log_stream = sys.stdout
-        # # Import channel layer
-        # sys.path.insert(0, ".")
+
         if ':' in args.channel_layer:
             module_path, object_path = args.channel_layer.split(":", 1)
         else:
@@ -213,12 +191,23 @@ class CommandLineInterface(object):
         #
 
 
-        executable = '{uwsgipath} --http-socket :{port} --master --ugreen --wsgi-file ../uwsgi_asgi.py --async {async}'.format(**vars(args))
-        for i in range(args.asgi_workers):
-            executable += ' --mule=../worker_mule.py'  # todo, maybe I can use farm instead of a loop
+        uwsgi_asgipy = os.path.join(uwsgi_asgi_path, 'uwsgi_asgi.py')
+        worker_mulepy = os.path.join(uwsgi_asgi_path, 'worker_mule.py')
+        args = vars(args)
+        args['uwsgi_asgipy'] = uwsgi_asgipy
+        args['worker_mulepy'] = worker_mulepy
+        executable = '{uwsgipath} --http-socket :{port} --master --ugreen --wsgi-file {uwsgi_asgipy} --async {async}'
+        for i in range(args['asgi_workers']):
+            executable += ' --mule={worker_mulepy}'  # todo, maybe I can use farm instead of a loop
+        executable = executable.format(**args)
         print(executable)
-        p = subprocess.Popen(executable.split(' '), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
-        return p.wait()
+        self.p = subprocess.Popen(executable.split(' '), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr)
+        if blocking:
+            return self.p.wait()
+
+    def close(self):
+        os.kill(self.p.pid, SIGINT)
+        return self.p.wait()
 
 
 if __name__ == '__main__':
