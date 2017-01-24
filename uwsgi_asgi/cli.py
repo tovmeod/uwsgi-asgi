@@ -6,7 +6,7 @@ import os
 import subprocess
 import sys
 
-from _signal import SIGINT
+from signal import SIGINT
 
 logger = logging.getLogger(__name__)
 
