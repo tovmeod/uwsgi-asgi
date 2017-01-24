@@ -160,7 +160,7 @@ class CommandLineInterface(object):
         # Decode args
         print(args)
         uwsgi_asgi_path = os.path.dirname(os.path.abspath(__file__))
-        args = self.parser.parse_args(args)
+        args, argv = self.parser.parse_known_args(args)
         sys.path.append('.')
         if args.chdir:
             wascwd = os.getcwd()
@@ -201,7 +201,7 @@ class CommandLineInterface(object):
         executable = '{uwsgipath} --http-socket :{port} --master --ugreen --wsgi-file {uwsgi_asgipy} --async {async}'
         for i in range(args['asgi_workers']):
             executable += ' --mule={worker_mulepy}'  # todo, maybe I can use farm instead of a loop
-        executable = executable.format(**args)
+        executable = executable.format(**args) + ' ' + ' '.join(x for x in argv)
         print(executable)
         self.p = subprocess.Popen(executable.split(' '), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, cwd=args['chdir'])
         if blocking:
