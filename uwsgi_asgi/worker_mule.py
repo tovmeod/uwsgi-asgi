@@ -1,8 +1,9 @@
-import uwsgi
 from channels import DEFAULT_CHANNEL_LAYER, channel_layers
 from channels.signals import worker_process_ready
 from channels.worker import Worker
 from django.core.wsgi import get_wsgi_application
+
+import uwsgi
 
 # os.environ.setdefault("DJANGO_SETTINGS_MODULE", "testproject.settings.channels_redis")
 
