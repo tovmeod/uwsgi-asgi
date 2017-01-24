@@ -9,11 +9,10 @@ import umsgpack
 from asgi_redis import RedisChannelLayer
 
 import uwsgi
+
 from six.moves.urllib_parse import unquote  # todo test is I actually need this or does uwsgi already parses? NOQA isort:skip
 
 # from daphne.ws_protocol import WebSocketProtocol
-
-__version__ = "0.1"
 
 logger = logging.getLogger(__name__)
 try:

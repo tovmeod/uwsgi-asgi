@@ -4,7 +4,7 @@ import time
 
 import umsgpack
 
-from uwsgi_asgi import channel_layer, get_pipe_name
+from uwsgi_asgi.uwsgi_asgi import channel_layer, get_pipe_name
 
 sys.path.append(os.getcwd())
 try:
