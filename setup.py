@@ -1,5 +1,6 @@
 from setuptools import find_packages, setup
-from uwsgi_asgi import __version__
+
+from uwsgi_asgi import __version__  # NOQA isort:skip
 
 setup(
     name='uwsgi_asgi',
@@ -40,4 +41,3 @@ setup(
         'Topic :: Internet :: WWW/HTTP :: ASGI :: Server'
     ]
 )
-
