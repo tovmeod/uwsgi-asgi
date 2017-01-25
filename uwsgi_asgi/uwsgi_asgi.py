@@ -372,7 +372,7 @@ def application(env, start_response):
                 if not layer_wrapper:  # on timeout call websocket_recv_nb again to manage ping/pong, typically on this point fd == -1
                     # no epoll
                     if time.time() - ppcounter > 3:
-                        print('ping/pong {}'.format(time.time() - ppcounter), end='', flush=True)
+                        # print('ping/pong {}'.format(time.time() - ppcounter), end='', flush=True)
                         try:
                             msg = uwsgi.websocket_recv_nb()
                             ppcounter = time.time()
@@ -384,8 +384,6 @@ def application(env, start_response):
 
                     ch, msg = channel_layer.receive([reply_channel], block=False)
                     if ch:
-                        if ch != reply_channel:
-                            print('got {} asked {}'.format(ch, reply_channel))
                         if process_message(msg):
                             return ''
                 print('.', end='', flush=True)

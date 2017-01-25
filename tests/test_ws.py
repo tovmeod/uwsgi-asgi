@@ -9,10 +9,13 @@ import websocket
 
 try:
     from asgi_redis import RedisChannelLayer as channel_layer_cls
+    channel_layer_kwargs = {}
     asgi_file = 'testproject.asgi'
 except ImportError:
     from asgi_ipc import IPCChannelLayer as channel_layer_cls
+    channel_layer_kwargs = {'capacity': 100}
     asgi_file = 'testproject.asgi_for_ipc'
+
 
 from tests.testproj.benchmark import Benchmarker
 from uwsgi_asgi.cli import CommandLineInterface
@@ -25,8 +28,8 @@ class TestWebSocketProtocol(TestCase):
 
     def setUp(self):
         self.server = CommandLineInterface()
-        self.server.run([asgi_file, '--chdir', 'testproj', '-L'], blocking=False)  # -L means disable request logging
-        self.channel_layer = channel_layer_cls()
+        self.server.run([asgi_file, '--chdir', 'tests/testproj', '-L'], blocking=False)  # -L means disable request logging
+        self.channel_layer = channel_layer_cls(**channel_layer_kwargs)
         self.channel_layer.flush()
         time.sleep(1)  # give some time to uwsgi to boot
         self.ws = websocket.WebSocket()
