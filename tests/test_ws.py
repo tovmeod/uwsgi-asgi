@@ -1,13 +1,18 @@
 # coding: utf8
 from __future__ import unicode_literals
 
-import os
 import time
 from unittest import TestCase
 
 import pytest
 import websocket
-from asgi_redis import RedisChannelLayer
+
+try:
+    from asgi_redis import RedisChannelLayer as channel_layer_cls
+    asgi_file = 'testproject.asgi'
+except ImportError:
+    from asgi_ipc import IPCChannelLayer as channel_layer_cls
+    asgi_file = 'testproject.asgi_for_ipc'
 
 from tests.testproj.benchmark import Benchmarker
 from uwsgi_asgi.cli import CommandLineInterface
@@ -20,10 +25,10 @@ class TestWebSocketProtocol(TestCase):
 
     def setUp(self):
         self.server = CommandLineInterface()
-        self.server.run(['testproject.asgi', '--chdir', 'tests/testproj'], blocking=False)
-        self.channel_layer = RedisChannelLayer()
-        self.channel_layer.connection(None).flushall()
-        time.sleep(1)
+        self.server.run([asgi_file, '--chdir', 'testproj', '-L'], blocking=False)  # -L means disable request logging
+        self.channel_layer = channel_layer_cls()
+        self.channel_layer.flush()
+        time.sleep(1)  # give some time to uwsgi to boot
         self.ws = websocket.WebSocket()
 
     def tearDown(self):
@@ -97,6 +102,7 @@ class TestWebSocketProtocol(TestCase):
         self.ws.connect('ws://127.0.0.1:8000')
         self.ws.send_close()
 
+    @pytest.mark.timeout(60*10)
     def test_benchmark(self):
         from twisted.internet import reactor
         benchmarker = Benchmarker(
@@ -110,3 +116,4 @@ class TestWebSocketProtocol(TestCase):
         )
         benchmarker.loop()
         reactor.run()
+        self.assertEqual(benchmarker.num_good, 100)

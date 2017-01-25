@@ -148,7 +148,7 @@ class Benchmarker(object):
     def print_stats(self):
         # Collect stats together
         latencies = []
-        num_good = 0
+        self.num_good = 0
         num_incomplete = 0
         num_failed = 0
         num_corruption = 0
@@ -164,7 +164,7 @@ class Benchmarker(object):
             elif entry['out_of_order']:
                 num_out_of_order += 1
             else:
-                num_good += 1
+                self.num_good += 1
 
         if latencies:
             # Some analysis on latencies
@@ -185,7 +185,7 @@ class Benchmarker(object):
                 latency_95,
                 latency_99,
             ))
-        print("Good sockets: %s (%.2f%%)" % (num_good, (float(num_good) / len(stats))*100))
+        print("Good sockets: %s (%.2f%%)" % (self.num_good, (float(self.num_good) / len(stats))*100))
         print("Incomplete sockets: %s (%.2f%%)" % (num_incomplete, (float(num_incomplete) / len(stats))*100))
         print("Corrupt sockets: %s (%.2f%%)" % (num_corruption, (float(num_corruption) / len(stats))*100))
         print("Out of order sockets: %s (%.2f%%)" % (num_out_of_order, (float(num_out_of_order) / len(stats))*100))
