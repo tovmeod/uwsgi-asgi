@@ -6,7 +6,6 @@ from contextlib import ExitStack
 
 import six
 import umsgpack
-from asgi_redis import RedisChannelLayer
 
 import uwsgi
 
@@ -267,8 +266,12 @@ class RedisLayerWrapper(LayerEpollWrapper):
 def get_layer_wrapper():
     # if isinstance(ch_layer, LayerEpollWrapper):
     #     return GenericLayerWrapper()
-    if isinstance(channel_layer, RedisChannelLayer):
-        return RedisLayerWrapper()
+    try:
+        from asgi_redis import RedisChannelLayer
+        if isinstance(channel_layer, RedisChannelLayer):  # todo: can I do this without importing?
+            return RedisLayerWrapper()
+    except ImportError:
+        pass
     return None
 
 
@@ -303,14 +306,12 @@ def application(env, start_response):
             # wait for response before sending handshake
             received_msg = None
             if layer_wrapper:
-                print('epoll layer {}'.format(type(layer_wrapper)))
                 uwsgi.wait_fd_read(layer_wrapper.fileno)
                 uwsgi.suspend()
                 fd = uwsgi.ready_fd()
                 if fd == layer_wrapper.fileno:
                     received_msg = layer_wrapper.receive()
-            else:
-                print('not epoll layer')
+            else:  # no epoll
                 start = time.time()
                 while time.time() - start < 3:
                     ch, received_msg = channel_layer.receive([reply_channel], block=False)
@@ -348,34 +349,45 @@ def application(env, start_response):
                     try:
                         msg = uwsgi.websocket_recv_nb()
                     except OSError:  # websocket closed on client side
-                        print('websocket closed on client side when trying to read {}'.format(reply_channel))
+                        #print('websocket closed on client side when trying to read {}'.format(reply_channel))
                         return ''
                     if msg:
                         code = wsapp.onMessage(msg, False)
                         if code:
                             print('onMessage code {}'.format(code))
                             return code
-                elif layer_wrapper and fd == layer_wrapper.fileno:
-                    msg = layer_wrapper.receive()
-                    if process_message(msg):
-                        return ''
-                else:  # on timeout call websocket_recv_nb again to manage ping/pong, typically on this point fd == -1
-                    if layer_wrapper or (not layer_wrapper and time.time() - ppcounter > 3):
-                        print('ping/pong ', end='', flush=True)
+                elif layer_wrapper:
+                        if fd == layer_wrapper.fileno:
+                            msg = layer_wrapper.receive()
+                            if process_message(msg):
+                                return ''
+                        else:  # timeout
+                            try:
+                                msg = uwsgi.websocket_recv_nb()
+                            except OSError:
+                                print('unable to receive websocket message after fd timeout')
+                                return ''  # unable to receive websocket message
+                            if msg:
+                                wsapp.onMessage(msg, False)
+                if not layer_wrapper:  # on timeout call websocket_recv_nb again to manage ping/pong, typically on this point fd == -1
+                    # no epoll
+                    if time.time() - ppcounter > 3:
+                        print('ping/pong {}'.format(time.time() - ppcounter), end='', flush=True)
                         try:
                             msg = uwsgi.websocket_recv_nb()
-                            if not layer_wrapper:
-                                ppcounter = time.time()
+                            ppcounter = time.time()
                         except OSError:
-                            print('unable to receive websocket message')
+                            print('unable to receive websocket message on no epoll loop')
                             return ''  # unable to receive websocket message
                         if msg:
                             wsapp.onMessage(msg, False)
-                    if not layer_wrapper:
-                        ch, msg = channel_layer.receive([reply_channel], block=False)
-                        if ch:
-                            if process_message(msg):
-                                return ''
+
+                    ch, msg = channel_layer.receive([reply_channel], block=False)
+                    if ch:
+                        if ch != reply_channel:
+                            print('got {} asked {}'.format(ch, reply_channel))
+                        if process_message(msg):
+                            return ''
                 print('.', end='', flush=True)
     else:  # normal http
         return wsgi_app(env, start_response)
