@@ -5,9 +5,12 @@ python:
   - "3.4"
   - "3.5"
 env:
-  - DJANGO="18"
-  - DJANGO="19"
-  - DJANGO="110"
+  - DJANGO="18" layer="IPC"
+  - DJANGO="18" layer="redis"
+  - DJANGO="19" layer="IPC"
+  - DJANGO="19" layer="redis"
+  - DJANGO="110" layer="IPC"
+  - DJANGO="110" layer="redis"
 services:
   - redis-server
 install: pip install tox-travis
