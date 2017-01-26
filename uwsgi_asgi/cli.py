@@ -160,6 +160,7 @@ class CommandLineInterface(object):
         # Decode args
         print(args)
         uwsgi_asgi_path = os.path.dirname(os.path.abspath(__file__))
+        print(uwsgi_asgi_path)
         args, argv = self.parser.parse_known_args(args)
         sys.path.append('.')
         if args.chdir:

@@ -7,14 +7,20 @@ from unittest import TestCase
 import pytest
 import websocket
 
+
 try:
-    from asgi_redis import RedisChannelLayer as channel_layer_cls
-    channel_layer_kwargs = {}
-    asgi_file = 'testproject.asgi'
+    from asgi_rabbitmq import RabbitmqChannelLayer as channel_layer_cls
+    channel_layer_kwargs = {'url': 'amqp://guest:guest@127.0.0.1:5672/%2F'}
+    asgi_file = 'testproject.asgi_for_rabbit'
 except ImportError:
-    from asgi_ipc import IPCChannelLayer as channel_layer_cls
-    channel_layer_kwargs = {'capacity': 100}
-    asgi_file = 'testproject.asgi_for_ipc'
+    try:
+        from asgi_redis import RedisChannelLayer as channel_layer_cls
+        channel_layer_kwargs = {}
+        asgi_file = 'testproject.asgi'
+    except ImportError:
+        from asgi_ipc import IPCChannelLayer as channel_layer_cls
+        channel_layer_kwargs = {'capacity': 100}
+        asgi_file = 'testproject.asgi_for_ipc'
 
 
 from tests.testproj.benchmark import Benchmarker
@@ -30,7 +36,10 @@ class TestWebSocketProtocol(TestCase):
         self.server = CommandLineInterface()
         self.server.run([asgi_file, '--chdir', 'tests/testproj', '-L'], blocking=False)  # -L means disable request logging
         self.channel_layer = channel_layer_cls(**channel_layer_kwargs)
-        self.channel_layer.flush()
+        try:
+            self.channel_layer.flush()
+        except NotImplementedError:
+            pass  # RabbitmqChannelLayer doesn't implement flush
         time.sleep(1)  # give some time to uwsgi to boot
         self.ws = websocket.WebSocket()
 
