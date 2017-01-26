@@ -9,7 +9,7 @@ setup(
     author='Avraham Seror',
     author_email='tovmeod@gmail.com',
     description="ASGI support to UWSGI.",
-    long_description=open('README.rst').read(),
+    long_description=open('README.md').read(),
     license='BSD',
     keywords='uwsgi django channels websocket asgi',
     packages=find_packages(exclude=['tests']),
@@ -19,8 +19,6 @@ setup(
         'six',
         'u-msgpack-python>=2.3.0',
     ],
-    tests_require=open('testproj/requirements.txt').readlines()+['websocket-client>=0.40.0', 'pytest>=3.0.5',
-                                                                 'pytest-timeout>=1.2.0'],
     entry_points={'console_scripts': [
         'uwsgiasgi = uwsgi_asgi.cli:CommandLineInterface.entrypoint',
     ]},
@@ -37,7 +35,7 @@ setup(
         'Programming Language :: Python :: 3.4',
         'Programming Language :: Python :: 3.5',
         "Framework :: Django",
-        'Topic :: Internet :: WWW/HTTP :: WSGI :: Server'
-        'Topic :: Internet :: WWW/HTTP :: ASGI :: Server'
+        # 'Topic :: Internet :: WWW/HTTP :: WSGI :: Server',
+        # 'Topic :: Internet :: WWW/HTTP :: ASGI :: Server'
     ]
 )

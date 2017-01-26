@@ -1,0 +1,5 @@
+# additional requirements to runnings tests, dependencies are listed in setup.py
+websocket-client>=0.40.0
+pytest>=3.0.5
+pytest-timeout>=1.2.0
+-r tests/testproj/requirements.txt
