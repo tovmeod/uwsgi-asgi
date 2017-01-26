@@ -49,7 +49,7 @@ class CommandLineInterface(object):
         )
         self.parser.add_argument(
             '--uwsgipath',
-            help='This is complete path of the directory to be changed to a new location, typically the django project root',
+            help='This is complete path to the uwsgi executable, if you are running this from the same virtualenv uwsgi is installed no need to set.',
             default=os.path.join(os.path.dirname(sys.executable), 'uwsgi')
         )
         self.parser.add_argument(
@@ -202,6 +202,7 @@ class CommandLineInterface(object):
         for i in range(args['asgi_workers']):
             executable += ' --mule={worker_mulepy}'  # todo, maybe I can use farm instead of a loop
         executable = executable.format(**args) + ' ' + ' '.join(x for x in argv)
+        executable = executable.strip()  # removes any spaces at the end, uwsgi will fail to load otherwise
         print(executable)
         self.p = subprocess.Popen(executable.split(' '), stdin=sys.stdin, stdout=sys.stdout, stderr=sys.stderr, cwd=args['chdir'])
         if blocking:
