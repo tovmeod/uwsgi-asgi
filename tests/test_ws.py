@@ -105,7 +105,7 @@ class TestWebSocketProtocol(TestCase):
         self.ws.connect('ws://127.0.0.1:8000')
         self.ws.send_close()
 
-    @pytest.mark.timeout(60*10)
+    @pytest.mark.skipif(asgi_file == 'testproject.asgi_for_ipc', reason='IPC is buggy')
     def test_benchmark(self):
         from twisted.internet import reactor
         benchmarker = Benchmarker(
