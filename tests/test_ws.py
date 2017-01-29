@@ -12,15 +12,18 @@ try:
     from asgi_rabbitmq import RabbitmqChannelLayer as channel_layer_cls
     channel_layer_kwargs = {}
     asgi_file = 'testproject.asgi_for_rabbit'
+    uwsgiargs = ['--enable-threads']
 except ImportError:
     try:
         from asgi_redis import RedisChannelLayer as channel_layer_cls
         channel_layer_kwargs = {}
         asgi_file = 'testproject.asgi'
+        uwsgiargs = []
     except ImportError:
         from asgi_ipc import IPCChannelLayer as channel_layer_cls
         channel_layer_kwargs = {'capacity': 100}
         asgi_file = 'testproject.asgi_for_ipc'
+        uwsgiargs = []
 
 
 from tests.testproj.benchmark import Benchmarker
@@ -32,7 +35,6 @@ class TestWebSocketProtocol(TestCase):
     Tests that the WS protocol class correctly generates and parses messages.
     """
 
-
     @pytest.fixture(autouse=True)
     def setup_channel_layer(self, rabbitmq_url):
 
@@ -43,7 +45,7 @@ class TestWebSocketProtocol(TestCase):
 
     def setUp(self):
         self.server = CommandLineInterface()
-        self.server.run([asgi_file, '--chdir', 'tests/testproj', '-L'], blocking=False)  # -L means disable request logging
+        self.server.run([asgi_file, '--chdir', 'tests/testproj', '-L']+uwsgiargs, blocking=False)  # -L means disable request logging
         if 'flush' in self.channel_layer.extensions:
             self.channel_layer.flush()
         time.sleep(1)  # give some time to uwsgi to boot
