@@ -1,6 +1,7 @@
 # coding: utf8
 from __future__ import unicode_literals
 
+import os
 import time
 from unittest import TestCase
 
@@ -39,6 +40,7 @@ class TestWebSocketProtocol(TestCase):
     def setup_channel_layer(self, rabbitmq_url):
 
         if asgi_file == 'testproject.asgi_for_rabbit':
+            os.environ['rabbitmq_url'] = rabbitmq_url
             self.channel_layer = channel_layer_cls(rabbitmq_url, **channel_layer_kwargs)
         else:
             self.channel_layer = channel_layer_cls(**channel_layer_kwargs)
@@ -118,6 +120,7 @@ class TestWebSocketProtocol(TestCase):
         with self.assertRaises(websocket.WebSocketConnectionClosedException):
             self.ws.recv_data()
 
+    @pytest.mark.timeout(20)
     def test_openclose(self):
         self.ws.connect('ws://127.0.0.1:8000')
         self.ws.send_close()

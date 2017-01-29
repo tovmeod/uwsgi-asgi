@@ -10,7 +10,7 @@ CHANNEL_LAYERS = {
         "BACKEND": "asgi_rabbitmq.RabbitmqChannelLayer",
         "ROUTING": "testproject.urls.channel_routing",
         "CONFIG": {
-            'url': 'amqp://guest:guest@127.0.0.1:5672/%2F',
+            'url': os.environ.get('rabbitmq_url', 'amqp://guest:guest@127.0.0.1:5672/default'),
         }
     },
 }
