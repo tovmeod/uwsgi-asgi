@@ -18,6 +18,8 @@ setup(
         'uWSGI>=2.0.14',
         'six',
         'u-msgpack-python>=2.3.0',
+        'butter==0.12.4',
+        'linuxfd==1.4.3'
     ],
     entry_points={'console_scripts': [
         'uwsgiasgi = uwsgi_asgi.cli:CommandLineInterface.entrypoint',
